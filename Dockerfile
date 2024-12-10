@@ -1,19 +1,20 @@
 FROM node:20-alpine
 
-# Définir le répertoire de travail dans le conteneur
 WORKDIR /app
 
-# Copier les fichiers package.json et package-lock.json pour installer les dépendances
+# Installation des dépendances globales
+RUN apk add --no-cache wget
+
+# Copie des fichiers de configuration
 COPY package*.json ./
 
-# Installer les dépendances nécessaires
-RUN npm install
+# Installation des dépendances
+RUN npm install --legacy-peer-deps
 
-# Copier tout le code source dans le conteneur
+# Copie du code source
 COPY . .
 
-# Exposer le port 4000 pour le conteneur
 EXPOSE 4000
 
-# Commande par défaut pour démarrer l'application
-CMD ["npm", "start"]
+# Script de démarrage
+CMD ["npm", "run", "start"]

@@ -2,10 +2,34 @@ services:
   ms-api-gateway:
     build:
       context: .
+    container_name: ms-api-gateway-${NODE_ENV:-development}
     ports:
       - "4000:4000"
     networks:
       - ms-network
+      - traefik-public
+    environment:
+      - JWT_SECRET=123456
+      - NODE_ENV=${NODE_ENV:-development}
+      - MS_AUTH_URL=http://ms-auth:3000
+      - SERVICE_NAME=ms-api-gateway
+      - SERVICE_PORT=4000
+    volumes:
+      - .:/app
+      - /app/node_modules
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.api-gateway.rule=PathPrefix(`/`)"
+      - "traefik.http.services.api-gateway.loadbalancer.server.port=4000"
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:4000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
 networks:
   ms-network:
     external: true
+  traefik-public:
+    name: traefik-public
+    external: ${TRAEFIK_EXTERNAL:-true}
