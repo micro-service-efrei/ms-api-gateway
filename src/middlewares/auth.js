@@ -1,13 +1,14 @@
-const { createProxyMiddleware } = require('http-proxy-middleware');
-const jwt = require('jsonwebtoken');
-const dotenv = require('dotenv');
+import jwt from 'jsonwebtoken';
+import dotenv from 'dotenv';
+
 dotenv.config();
 
 const jwtSecret = process.env.JWT_SECRET;
 
-function authMiddleware(req, res, next) {
+export function authMiddleware(req, res, next) {
   try {
-    const authHeader = req.headers["authorization"];
+    console.log(req.headers)
+    const authHeader = req.headers.authorization;
     if (!authHeader) {
       return res.status(401).json({ error: "No token provided" });
     }
@@ -33,8 +34,4 @@ function authMiddleware(req, res, next) {
     console.error(error);
     return res.status(500).json({ error: error.message });
   }
-}
-
-module.exports = (app) => {
-    authMiddleware();
 }

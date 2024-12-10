@@ -1,17 +1,14 @@
-const express = require('express');
-const morgan = require('morgan');
-const dotenv = require('dotenv');
-const authenticateToken = require('./middlewares/auth');
-const setupProxies = require('./routes/proxy');
-
+import express from 'express'
+import morgan from 'morgan'
+import { authMiddleware } from './middlewares/auth.js'
+import dotenv from 'dotenv'
+import { setupProxies } from './routes/proxy.js'
 dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 4000;
 
 app.use(morgan('dev'));
-
-app.use(authenticateToken);
 
 setupProxies(app);
 
