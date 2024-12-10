@@ -1,6 +1,5 @@
 import express from 'express'
 import morgan from 'morgan'
-import { authMiddleware } from './middlewares/auth.js'
 import dotenv from 'dotenv'
 import { setupProxies } from './routes/proxy.js'
 dotenv.config();
