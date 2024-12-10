@@ -34,7 +34,7 @@ export const setupProxies = (app) => {
 
       if (req.body && (req.method === "POST" || req.method === "PUT")) {
         const bodyData = JSON.stringify(req.body);
-        console.log("Envoi du body:", bodyData);
+        console.log("Envoi du body auth:", bodyData);
         proxyReq.setHeader("Content-Type", "application/json");
         proxyReq.setHeader("Content-Length", Buffer.byteLength(bodyData));
         proxyReq.write(bodyData);
@@ -90,31 +90,57 @@ export const setupProxies = (app) => {
     proxyTimeout: 5000,
     timeout: 5000,
     pathRewrite: {
-      "^/ms-book": "", // Supprime le préfixe ms-book
+      "^/ms-book": "",
     },
     onProxyReq: (proxyReq, req, res) => {
-      // Log complet des headers avant transmission
-      console.log("Headers de la requête vers ms-book:", {
-        originalHeaders: req.headers,
-        proxyHeaders: proxyReq.getHeaders(),
-        authorization: req.headers.authorization
+      console.log("Book Proxy - Incoming Request:", {
+        method: req.method,
+        url: req.url,
+        headers: req.headers,
+        body: req.body,
+        timestamp: new Date().toISOString(),
       });
 
-      // Transmission explicite du header d'autorisation
       if (req.headers.authorization) {
-        proxyReq.setHeader('authorization', req.headers.authorization);
+        proxyReq.setHeader("Authorization", req.headers.authorization);
       }
 
-      if (req.body && (req.method === "POST" || req.method === "PUT")) {
+      if ((req.method === "POST" || req.method === "PUT") && req.body) {
+        proxyReq.removeHeader("Content-Length");
+
         const bodyData = JSON.stringify(req.body);
-        // Réinitialisation des headers pour le body
+        console.log("Book Proxy - Preparing to send body:", bodyData);
+
         proxyReq.setHeader("Content-Type", "application/json");
         proxyReq.setHeader("Content-Length", Buffer.byteLength(bodyData));
         proxyReq.write(bodyData);
+        proxyReq.end();
       }
     },
+    onProxyRes: (proxyRes, req, res) => {
+      let responseBody = "";
+      proxyRes.on("data", (chunk) => {
+        responseBody += chunk;
+      });
+
+      proxyRes.on("end", () => {
+        console.log("Book Service Response:", {
+          statusCode: proxyRes.statusCode,
+          headers: proxyRes.headers,
+          body: responseBody,
+          timestamp: new Date().toISOString(),
+        });
+
+        if (proxyRes.statusCode === 400 && !responseBody.trim()) {
+          res.status(400).json({
+            error: "Bad Request",
+            message: "Invalid book data format",
+          });
+        }
+      });
+    },
     onError: (err, req, res) => {
-      console.error("Erreur de proxy book:", {
+      console.error("Book Proxy Error:", {
         error: err.message,
         stack: err.stack,
         url: req.url,
@@ -122,9 +148,8 @@ export const setupProxies = (app) => {
         timestamp: new Date().toISOString(),
       });
       res.status(502).json({
-        error: "Erreur de proxy",
+        error: "Proxy Error",
         message: err.message,
-        path: req.url,
       });
     },
     logLevel: "debug",
@@ -143,6 +168,7 @@ export const setupProxies = (app) => {
         url: req.url,
         method: req.method,
         targetPath: proxyReq.path,
+        headers: proxyReq.getHeaders(),
         timestamp: new Date().toISOString(),
       });
 
@@ -154,37 +180,62 @@ export const setupProxies = (app) => {
         proxyReq.end();
       }
     },
+    onProxyRes: (proxyRes, req, res) => {
+      let responseBody = "";
+      proxyRes.on("data", (chunk) => {
+        responseBody += chunk;
+      });
+
+      proxyRes.on("end", () => {
+        console.log("Notification Service Response:", {
+          statusCode: proxyRes.statusCode,
+          headers: proxyRes.headers,
+          body: responseBody,
+          timestamp: new Date().toISOString(),
+        });
+      });
+    },
     onError: (err, req, res) => {
-      console.error("Erreur de proxy notification:", err);
-      res.status(502).json({ error: "Erreur de proxy", message: err.message });
+      console.error("Erreur de proxy notification:", {
+        error: err.message,
+        stack: err.stack,
+        url: req.url,
+        method: req.method,
+      });
+      res.status(502).json({
+        error: "Erreur de proxy",
+        message: err.message,
+      });
     },
     logLevel: "debug",
   });
 
-  // Application des proxies avec gestion spéciale pour les routes du service book
+  // Application des routes
   app.use("/ms-auth", msAuthProxy);
 
   // Routes du service book avec authentification conditionnelle
   app.use("/ms-book/books", (req, res, next) => {
-    console.log("Route /ms-book/books appelée:", {
+    console.log("Processing book request:", {
       method: req.method,
+      url: req.url,
       headers: req.headers,
-      timestamp: new Date().toISOString()
+      body: req.body,
     });
-    
+
     if (req.method === "GET") {
       return msBookProxy(req, res, next);
     }
-    
+
     authMiddleware(req, res, () => {
-      console.log("Authentification réussie, transmission au proxy");
+      console.log("Auth successful, forwarding to book service");
       msBookProxy(req, res, next);
     });
   });
 
-  // Autres routes du service book (nécessitent authentification)
+  // Autres routes du service book
   app.use("/ms-book", authMiddleware, msBookProxy);
 
+  // Routes notifications
   app.use("/ms-notification", authMiddleware, msNotificationProxy);
 
   // Middleware pour les routes non trouvées

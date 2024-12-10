@@ -4,9 +4,8 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "NODE_OPTIONS=--experimental-vm-modules jest --detectOpenHandles",
-    "test:watch": "NODE_OPTIONS=--experimental-vm-modules jest --watch",
-    "test:coverage": "NODE_OPTIONS=--experimental-vm-modules jest --coverage",
+    "test": "chmod +x ./test/api.sh && ./test/api.sh",
+    "test:unit": "NODE_OPTIONS=--experimental-vm-modules jest --detectOpenHandles",
     "start": "node ./src/server.js",
     "dev": "nodemon ./src/server.js"
   },

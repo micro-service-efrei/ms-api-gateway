@@ -10,8 +10,27 @@ const PORT = process.env.PORT || 4000;
 
 // Configuration de base
 app.use(morgan("dev"));
-app.use(express.json({ limit: "10mb" }));
+app.use(express.json({ 
+  limit: "10mb",
+  strict: false,  // Permet des JSON moins stricts
+  verify: (req, res, buf) => {
+    try {
+      JSON.parse(buf);
+    } catch (e) {
+      console.error("Invalid JSON:", e);
+    }
+    req.rawBody = buf;
+  }
+}));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
+
+// Ajout du body-parser avec option raw
+app.use(express.json({ 
+  limit: "10mb",
+  verify: (req, res, buf) => {
+    req.rawBody = buf;
+  }
+}));
 
 // Configuration CORS
 app.use(
