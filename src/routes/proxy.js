@@ -2,26 +2,25 @@ const { createProxyMiddleware } = require('http-proxy-middleware');
 
 module.exports = (app) => {
   app.use(
-    '/users',
+    '/ms-auth',
     createProxyMiddleware({
-      target: 'http://localhost:5000',
-      changeOrigin: true,
-    })
-  );
-
-  // Proxy vers le Delivery Service
-  app.use(
-    '/deliveries',
-    createProxyMiddleware({
-      target: 'http://localhost:5001',
+      target: 'http://localhost:3000',
       changeOrigin: true,
     })
   );
 
   app.use(
-    '/notifications',
+    '/ms-book',
     createProxyMiddleware({
-      target: 'http://localhost:5002', 
+      target: 'http://localhost:3001',
+      changeOrigin: true,
+    })
+  );
+
+  app.use(
+    '/ms-notification',
+    createProxyMiddleware({
+      target: 'http://localhost:3002', 
       changeOrigin: true,
     })
   );

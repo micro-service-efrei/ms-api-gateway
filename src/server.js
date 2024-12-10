@@ -4,7 +4,6 @@ const dotenv = require('dotenv');
 const authenticateToken = require('./middlewares/auth');
 const setupProxies = require('./routes/proxy');
 
-// Charger les variables d'environnement
 dotenv.config();
 
 const app = express();
