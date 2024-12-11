@@ -7,6 +7,7 @@ services:
       - "4000:4000"
     networks:
       - ms-network
+      - book-network
       - traefik-public
     environment:
       - JWT_SECRET=123456
@@ -14,6 +15,8 @@ services:
       - MS_AUTH_URL=http://ms-auth:3000
       - SERVICE_NAME=ms-api-gateway
       - SERVICE_PORT=4000
+      - MS_NOTIFICATION_URL=http://notification-service:3002
+      - DEBUG=express:*  # Ajout du debug Express
     volumes:
       - .:/app
       - /app/node_modules
@@ -29,6 +32,8 @@ services:
 
 networks:
   ms-network:
+    external: true
+  book-network:
     external: true
   traefik-public:
     name: traefik-public

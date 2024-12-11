@@ -1,0 +1,184 @@
+
+paths:
+  /ms-book/books:
+    get:
+      tags:
+        - Books
+      summary: Liste tous les livres
+      description: Récupère la liste de tous les livres disponibles
+      parameters:
+        - in: query
+          name: page
+          schema:
+            type: integer
+            default: 1
+          description: Numéro de page pour la pagination
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 10
+          description: Nombre d'éléments par page
+      responses:
+        200:
+          description: Liste des livres récupérée avec succès
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  books:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Book'
+                  total:
+                    type: integer
+                  page:
+                    type: integer
+                  totalPages:
+                    type: integer
+        500:
+          description: Erreur serveur
+
+    post:
+      tags:
+        - Books
+      summary: Ajoute un nouveau livre
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BookInput'
+      responses:
+        201:
+          description: Livre créé avec succès
+        401:
+          description: Non autorisé
+        400:
+          description: Données invalides
+
+  /ms-book/books/{id}:
+    get:
+      tags:
+        - Books
+      summary: Récupère un livre par son ID
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+          description: ID du livre
+      responses:
+        200:
+          description: Livre trouvé
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Book'
+        404:
+          description: Livre non trouvé
+
+    put:
+      tags:
+        - Books
+      summary: Met à jour un livre
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+          description: ID du livre à modifier
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BookInput'
+      responses:
+        200:
+          description: Livre mis à jour avec succès
+        401:
+          description: Non autorisé
+        404:
+          description: Livre non trouvé
+
+    delete:
+      tags:
+        - Books
+      summary: Supprime un livre
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+          description: ID du livre à supprimer
+      responses:
+        200:
+          description: Livre supprimé avec succès
+        401:
+          description: Non autorisé
+        404:
+          description: Livre non trouvé
+
+components:
+  schemas:
+    Book:
+      type: object
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        author:
+          type: string
+        description:
+          type: string
+        categories:
+          type: array
+          items:
+            type: string
+        publishedDate:
+          type: string
+          format: date
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    BookInput:
+      type: object
+      required:
+        - title
+        - author
+        - categories
+      properties:
+        title:
+          type: string
+          example: "Le Petit Prince"
+        author:
+          type: string
+          example: "Antoine de Saint-Exupéry"
+        description:
+          type: string
+          example: "Une histoire magique sur l'amitié"
+        categories:
+          type: array
+          items:
+            type: string
+          example: ["Fiction", "Jeunesse"]
+        publishedDate:
+          type: string
+          format: date
+          example: "1943-04-06"

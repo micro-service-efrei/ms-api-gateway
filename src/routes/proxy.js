@@ -5,7 +5,7 @@ import { authMiddleware } from "../middlewares/auth.js";
 export const setupProxies = (app) => {
   // Middleware de logging global
   app.use((req, res, next) => {
-    console.log("Requête reçue sur l'API Gateway:", {
+    console.log("Gateway Request:", {
       method: req.method,
       url: req.url,
       headers: req.headers,
@@ -22,31 +22,30 @@ export const setupProxies = (app) => {
     ws: true,
     proxyTimeout: 5000,
     timeout: 5000,
-    pathRewrite: null,
     onProxyReq: (proxyReq, req, res) => {
-      console.log("Début de la requête proxy auth:", {
+      console.log("Auth Proxy Request:", {
         url: req.url,
         method: req.method,
-        targetPath: proxyReq.path,
+        body: req.body,
         headers: proxyReq.getHeaders(),
         timestamp: new Date().toISOString(),
       });
 
       if (req.body && (req.method === "POST" || req.method === "PUT")) {
         const bodyData = JSON.stringify(req.body);
-        console.log("Envoi du body auth:", bodyData);
+        // Reset Content-Length
+        proxyReq.removeHeader("Content-Length");
         proxyReq.setHeader("Content-Type", "application/json");
         proxyReq.setHeader("Content-Length", Buffer.byteLength(bodyData));
+        console.log("Sending body to auth service:", bodyData);
         proxyReq.write(bodyData);
-        proxyReq.end();
       }
     },
     onProxyRes: (proxyRes, req, res) => {
-      console.log("Réponse reçue du service auth:", {
+      console.log("Auth Service Response Headers:", {
         statusCode: proxyRes.statusCode,
         headers: proxyRes.headers,
         url: req.url,
-        timestamp: new Date().toISOString(),
       });
 
       if (proxyRes.headers["authorization"]) {
@@ -59,28 +58,26 @@ export const setupProxies = (app) => {
       });
 
       proxyRes.on("end", () => {
-        console.log("Corps de la réponse auth:", {
+        console.log("Auth Service Response Body:", {
+          statusCode: proxyRes.statusCode,
           body: responseBody,
           url: req.url,
         });
       });
     },
     onError: (err, req, res) => {
-      console.error("Erreur de proxy auth:", {
+      console.error("Auth Proxy Error:", {
         error: err.message,
         stack: err.stack,
         url: req.url,
         method: req.method,
-        timestamp: new Date().toISOString(),
       });
       res.status(502).json({
-        error: "Erreur de proxy",
+        error: "Proxy Error",
         message: err.message,
         path: req.url,
       });
     },
-    logLevel: "debug",
-    logProvider: () => console,
   });
 
   // Configuration du proxy pour le service de livres
@@ -93,28 +90,16 @@ export const setupProxies = (app) => {
       "^/ms-book": "",
     },
     onProxyReq: (proxyReq, req, res) => {
-      console.log("Book Proxy - Incoming Request:", {
-        method: req.method,
-        url: req.url,
-        headers: req.headers,
-        body: req.body,
-        timestamp: new Date().toISOString(),
-      });
-
       if (req.headers.authorization) {
         proxyReq.setHeader("Authorization", req.headers.authorization);
       }
 
       if ((req.method === "POST" || req.method === "PUT") && req.body) {
-        proxyReq.removeHeader("Content-Length");
-
         const bodyData = JSON.stringify(req.body);
-        console.log("Book Proxy - Preparing to send body:", bodyData);
-
+        proxyReq.removeHeader("Content-Length");
         proxyReq.setHeader("Content-Type", "application/json");
         proxyReq.setHeader("Content-Length", Buffer.byteLength(bodyData));
         proxyReq.write(bodyData);
-        proxyReq.end();
       }
     },
     onProxyRes: (proxyRes, req, res) => {
@@ -126,17 +111,9 @@ export const setupProxies = (app) => {
       proxyRes.on("end", () => {
         console.log("Book Service Response:", {
           statusCode: proxyRes.statusCode,
-          headers: proxyRes.headers,
           body: responseBody,
-          timestamp: new Date().toISOString(),
+          url: req.url,
         });
-
-        if (proxyRes.statusCode === 400 && !responseBody.trim()) {
-          res.status(400).json({
-            error: "Bad Request",
-            message: "Invalid book data format",
-          });
-        }
       });
     },
     onError: (err, req, res) => {
@@ -144,40 +121,62 @@ export const setupProxies = (app) => {
         error: err.message,
         stack: err.stack,
         url: req.url,
-        method: req.method,
-        timestamp: new Date().toISOString(),
       });
       res.status(502).json({
         error: "Proxy Error",
         message: err.message,
       });
     },
-    logLevel: "debug",
   });
 
   // Configuration du proxy pour le service de notifications
   const msNotificationProxy = createProxyMiddleware({
-    target: "http://ms-notification:3002",
+    target:
+      process.env.MS_NOTIFICATION_URL || "http://notification-service:3002",
     changeOrigin: true,
     ws: true,
-    proxyTimeout: 5000,
-    timeout: 5000,
-    pathRewrite: null,
-    onProxyReq: (proxyReq, req, res) => {
-      console.log("Début de la requête proxy notification:", {
+    proxyTimeout: 30000,
+    timeout: 30000,
+    pathRewrite: {
+      "^/ms-notification": "", // This will remove the /ms-notification prefix
+    },
+    onError: (err, req, res) => {
+      console.error("Notification Proxy Error:", {
+        error: err.message,
+        stack: err.stack,
         url: req.url,
         method: req.method,
-        targetPath: proxyReq.path,
-        headers: proxyReq.getHeaders(),
-        timestamp: new Date().toISOString(),
+        targetUrl: process.env.MS_NOTIFICATION_URL + req.url,
+        networkInfo: {
+          target: process.env.MS_NOTIFICATION_URL,
+          originalUrl: req.originalUrl,
+        },
       });
+      res.status(502).json({
+        error: "Proxy Error",
+        message: err.message,
+        path: req.url,
+      });
+    },
+    onProxyReq: (proxyReq, req, res) => {
+      console.log("Debug Notification Request:", {
+        originalUrl: req.originalUrl,
+        targetUrl: `${process.env.MS_NOTIFICATION_URL}${req.url}`,
+        method: req.method,
+        body: req.body,
+        headers: req.headers,
+      });
+      if (req.headers.authorization) {
+        proxyReq.setHeader("Authorization", req.headers.authorization);
+      }
 
       if (req.body && (req.method === "POST" || req.method === "PUT")) {
         const bodyData = JSON.stringify(req.body);
+        proxyReq.removeHeader("Content-Length");
         proxyReq.setHeader("Content-Type", "application/json");
         proxyReq.setHeader("Content-Length", Buffer.byteLength(bodyData));
+        console.log("Sending notification request:", bodyData);
         proxyReq.write(bodyData);
-        proxyReq.end();
       }
     },
     onProxyRes: (proxyRes, req, res) => {
@@ -189,66 +188,55 @@ export const setupProxies = (app) => {
       proxyRes.on("end", () => {
         console.log("Notification Service Response:", {
           statusCode: proxyRes.statusCode,
-          headers: proxyRes.headers,
           body: responseBody,
+          url: req.url,
+          method: req.method,
           timestamp: new Date().toISOString(),
         });
       });
     },
-    onError: (err, req, res) => {
-      console.error("Erreur de proxy notification:", {
-        error: err.message,
-        stack: err.stack,
-        url: req.url,
-        method: req.method,
-      });
-      res.status(502).json({
-        error: "Erreur de proxy",
-        message: err.message,
-      });
-    },
-    logLevel: "debug",
   });
 
   // Application des routes
+  // Route Auth sans middleware d'authentification
   app.use("/ms-auth", msAuthProxy);
 
-  // Routes du service book avec authentification conditionnelle
+  // Routes Book avec authentification conditionnelle
   app.use("/ms-book/books", (req, res, next) => {
-    console.log("Processing book request:", {
-      method: req.method,
-      url: req.url,
-      headers: req.headers,
-      body: req.body,
-    });
-
     if (req.method === "GET") {
       return msBookProxy(req, res, next);
     }
-
-    authMiddleware(req, res, () => {
-      console.log("Auth successful, forwarding to book service");
-      msBookProxy(req, res, next);
-    });
+    authMiddleware(req, res, () => msBookProxy(req, res, next));
   });
 
-  // Autres routes du service book
+  // Autres routes Book
   app.use("/ms-book", authMiddleware, msBookProxy);
 
-  // Routes notifications
-  app.use("/ms-notification", authMiddleware, msNotificationProxy);
+  // Routes Notification avec authentification
+  app.use("/ms-notification", authMiddleware, (req, res, next) => {
+    const targetPath = req.url.replace("/ms-notification", "");
+    console.log("Notification routing debug:", {
+      originalUrl: req.originalUrl,
+      url: req.url,
+      targetPath: targetPath,
+      fullTargetUrl: `${process.env.MS_NOTIFICATION_URL}${targetPath}`,
+    });
+    req.url = targetPath; // Modification de l'URL pour le proxy
+    return msNotificationProxy(req, res, next);
+  });
 
   // Middleware pour les routes non trouvées
   app.use((req, res) => {
-    console.log("Route non trouvée:", {
+    console.log("Route not found:", {
       method: req.method,
       url: req.url,
       timestamp: new Date().toISOString(),
     });
     res.status(404).json({
-      error: "Route non trouvée",
+      error: "Route not found",
       path: req.url,
       method: req.method,
+      timestamp: new Date().toISOString(),
     });
   });
 };

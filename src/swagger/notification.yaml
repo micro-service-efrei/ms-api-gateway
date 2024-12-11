@@ -1,0 +1,43 @@
+
+paths:
+  /ms-notification/notify:
+    post:
+      tags:
+        - Notifications
+      summary: Envoyer une notification
+      security:
+        - BearerAuth: []
+      description: Envoie une notification par email
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - to
+                - subject
+                - message
+                - type
+              properties:
+                to:
+                  type: string
+                  format: email
+                  example: "recipient@example.com"
+                subject:
+                  type: string
+                  example: "Nouvelle notification"
+                message:
+                  type: string
+                  example: "Contenu du message"
+                type:
+                  type: string
+                  enum: [EMAIL]
+                  example: "EMAIL"
+      responses:
+        200:
+          description: Notification envoyée avec succès
+        401:
+          description: Non autorisé
+        500:
+          description: Erreur serveur

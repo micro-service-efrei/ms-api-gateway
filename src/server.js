@@ -3,6 +3,9 @@ import morgan from "morgan";
 import dotenv from "dotenv";
 import cors from "cors";
 import { setupProxies } from "./routes/proxy.js";
+import swaggerUi from 'swagger-ui-express';
+import swaggerJsdoc from 'swagger-jsdoc';
+
 dotenv.config();
 
 const app = express();
@@ -10,27 +13,24 @@ const PORT = process.env.PORT || 4000;
 
 // Configuration de base
 app.use(morgan("dev"));
-app.use(express.json({ 
-  limit: "10mb",
-  strict: false,  // Permet des JSON moins stricts
-  verify: (req, res, buf) => {
-    try {
-      JSON.parse(buf);
-    } catch (e) {
-      console.error("Invalid JSON:", e);
-    }
-    req.rawBody = buf;
-  }
-}));
-app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
-// Ajout du body-parser avec option raw
-app.use(express.json({ 
-  limit: "10mb",
-  verify: (req, res, buf) => {
-    req.rawBody = buf;
-  }
-}));
+// Configuration unique du middleware JSON
+app.use(
+  express.json({
+    limit: "10mb",
+    strict: false,
+    verify: (req, res, buf) => {
+      try {
+        JSON.parse(buf);
+      } catch (e) {
+        console.error("Invalid JSON:", e);
+      }
+      req.rawBody = buf.toString();
+    },
+  })
+);
+
+app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
 // Configuration CORS
 app.use(
@@ -39,12 +39,12 @@ app.use(
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
     credentials: true,
+    exposedHeaders: ["Authorization"],
   })
 );
 
 // Middleware de logging amélioré
 app.use((req, res, next) => {
-  // Log de la requête entrante
   console.log("Incoming request:", {
     method: req.method,
     path: req.path,
@@ -53,7 +53,6 @@ app.use((req, res, next) => {
     timestamp: new Date().toISOString(),
   });
 
-  // Intercepter la réponse
   const oldJson = res.json;
   res.json = function (data) {
     console.log("Response data:", {
@@ -66,7 +65,6 @@ app.use((req, res, next) => {
     return oldJson.apply(res, arguments);
   };
 
-  // Log à la fin de la réponse
   res.on("finish", () => {
     console.log("Response completed:", {
       method: req.method,
@@ -79,9 +77,60 @@ app.use((req, res, next) => {
   next();
 });
 
+// Configuration Swagger
+const swaggerOptions = {
+  definition: {
+    openapi: '3.0.0',
+    info: {
+      title: 'API Gateway Documentation',
+      version: '1.0.0',
+      description: 'Documentation de l\'API Gateway pour le système de microservices',
+      contact: {
+        name: 'API Support',
+        url: 'http://localhost:4000'
+      }
+    },
+    servers: [
+      {
+        url: 'http://localhost:4000',
+        description: 'Serveur de développement'
+      }
+    ],
+    components: {
+      securitySchemes: {
+        BearerAuth: {
+          type: 'http',
+          scheme: 'bearer',
+          bearerFormat: 'JWT'
+        }
+      }
+    }
+  },
+  apis: [
+    './src/swagger/*.yaml',
+    './src/routes/*.js'
+  ].map(pattern => process.cwd() + '/' + pattern) // Utilisation des chemins absolus
+};
+
+const swaggerSpec = swaggerJsdoc(swaggerOptions);
+
+// Déplacer la route Swagger AVANT la configuration des proxies et APRÈS la config CORS
+app.use('/api-docs', swaggerUi.serve);
+app.get('/api-docs', swaggerUi.setup(swaggerSpec, {
+  explorer: true,
+  customCss: '.swagger-ui .topbar { display: none }',
+  swaggerOptions: {
+    persistAuthorization: true
+  }
+}));
+
 // Route de santé
 app.get("/health", (req, res) => {
-  res.json({ status: "ok" });
+  res.json({
+    status: "ok",
+    timestamp: new Date().toISOString(),
+    service: "api-gateway",
+  });
 });
 
 // Configuration des proxies
@@ -103,11 +152,13 @@ app.use((err, req, res, next) => {
       process.env.NODE_ENV === "development"
         ? err.message
         : "An internal error occurred",
+    path: req.path,
+    timestamp: new Date().toISOString(),
   });
 });
 
 // Démarrage du serveur
-if (process.env.NODE_ENV !== 'test') {
+if (process.env.NODE_ENV !== "test") {
   app.listen(PORT, () => {
     console.log(`API Gateway started on http://localhost:${PORT}`);
   });
