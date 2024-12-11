@@ -138,7 +138,7 @@ export const setupProxies = (app) => {
     proxyTimeout: 30000,
     timeout: 30000,
     pathRewrite: {
-      "^/ms-notification": "", // This will remove the /ms-notification prefix
+      "^/ms-notification": "",
     },
     onError: (err, req, res) => {
       console.error("Notification Proxy Error:", {
